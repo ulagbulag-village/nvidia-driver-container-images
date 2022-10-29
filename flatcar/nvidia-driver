@@ -9,10 +9,6 @@ DRIVER_VERSION=${DRIVER_VERSION:?"Missing driver version"}
 NVIDIA_BINUTILS_DIR=/opt/nvidia/binutils
 NVIDIA_KMODS_DIR=/opt/nvidia/${DRIVER_VERSION}
 
-export COREOS_RELEASE_CHANNEL=stable
-COREOS_RELEASE_BOARD=amd64-usr
-COREOS_ALL_RELEASES="https://www.flatcar-linux.org/releases-json/releases-${COREOS_RELEASE_CHANNEL}.json"
-
 export DEBIAN_FRONTEND=noninteractive
 
 # The developement environment is required to access gcc and binutils
@@ -27,10 +23,8 @@ _install_development_env() {
     # The environment is mounted on a loop device and then we chroot into 
     # the mount to build the NVIDIA kernel driver interface. 
     # The resulting module files and module dependencies are then archived.
-    local latest_release
-    latest_release=$(echo "${COREOS_RELEASE_VERSION}" | awk '{ print $1 }')
     local dev_image="/tmp/flatcar_developer_container.bin"
-    local dev_image_url="https://${COREOS_RELEASE_CHANNEL}.release.flatcar-linux.net/${COREOS_RELEASE_BOARD}/${latest_release}/${dev_image##*/}.bz2"
+    local dev_image_url="https://${FLATCAR_RELEASE_CHANNEL}.release.flatcar-linux.net/${FLATCAR_RELEASE_BOARD}/${FLATCAR_VERSION}/${dev_image##*/}.bz2"
 
     curl -Ls "${dev_image_url}" | lbzip2 -dq > "${dev_image}"
     local sector_size
@@ -39,43 +33,43 @@ _install_development_env() {
     sector_start=$(fdisk -l "${dev_image}" | grep "^${dev_image}*" | awk '{ print $2 }')
     local offset_limit=$((sector_start * sector_size))
 
-    mkdir -p /mnt/coreos /mnt/dev
+    mkdir -p /mnt/flatcar /mnt/dev
     _exec mount -o offset=${offset_limit} ${dev_image} /mnt/dev
-    tar -cp -C /mnt/dev . | tar -xpf - -C /mnt/coreos
+    tar -cp -C /mnt/dev . | tar -xpf - -C /mnt/flatcar
     _exec umount -l /mnt/dev
     rm -f "${dev_image}"
 
     # Version.txt contains some pre-defined environment variables 
     # that we will use when building the kernel modules
-    curl -fOSsL https://${COREOS_RELEASE_CHANNEL}.release.flatcar-linux.net/${COREOS_RELEASE_BOARD}/${latest_release}/version.txt
+    curl -fOSsL https://${FLATCAR_RELEASE_CHANNEL}.release.flatcar-linux.net/${FLATCAR_RELEASE_BOARD}/${FLATCAR_VERSION}/version.txt
     cp version.txt /usr/src
 
     # Prepare the mount point for the chroot
-    cp --dereference /etc/resolv.conf /mnt/coreos/etc/
-    _exec mount --types proc /proc /mnt/coreos/proc
-    _exec mount --rbind /sys /mnt/coreos/sys
-    _exec mount --make-rslave /mnt/coreos/sys
-    _exec mount --rbind /dev /mnt/coreos/dev
-    _exec mount --make-rslave /mnt/coreos/dev
-    mkdir -p /mnt/coreos/usr/src
-    _exec mount --rbind /usr/src /mnt/coreos/usr/src
+    cp --dereference /etc/resolv.conf /mnt/flatcar/etc/
+    _exec mount --types proc /proc /mnt/flatcar/proc
+    _exec mount --rbind /sys /mnt/flatcar/sys
+    _exec mount --make-rslave /mnt/flatcar/sys
+    _exec mount --rbind /dev /mnt/flatcar/dev
+    _exec mount --make-rslave /mnt/flatcar/dev
+    mkdir -p /mnt/flatcar/usr/src
+    _exec mount --rbind /usr/src /mnt/flatcar/usr/src
 
     # Archive the binutils since we need the linker for re-linking the modules
     if [ ! -e ${NVIDIA_BINUTILS_DIR} ]; then
         mkdir -p ${NVIDIA_BINUTILS_DIR}/libs
         mkdir -p ${NVIDIA_BINUTILS_DIR}/bin
     fi
-    local binutils_ver=$(ls -d /mnt/coreos/usr/lib64/binutils/x86_64-cros-linux-gnu/*)
+    local binutils_ver=$(ls -d /mnt/flatcar/usr/lib64/binutils/$(arch)-cros-linux-gnu/*)
     binutils_ver=${binutils_ver##*/}
-    cp -r /mnt/coreos/usr/x86_64-cros-linux-gnu/binutils-bin/${binutils_ver}/* ${NVIDIA_BINUTILS_DIR}/bin/
-    cp -r /mnt/coreos/usr/lib64/binutils/x86_64-cros-linux-gnu/${binutils_ver}/* ${NVIDIA_BINUTILS_DIR}/libs/
-    cp -a /mnt/coreos/usr/lib64/*.so* ${NVIDIA_BINUTILS_DIR}/libs/
+    cp -r /mnt/flatcar/usr/$(arch)-cros-linux-gnu/binutils-bin/${binutils_ver}/* ${NVIDIA_BINUTILS_DIR}/bin/
+    cp -r /mnt/flatcar/usr/lib64/binutils/$(arch)-cros-linux-gnu/${binutils_ver}/* ${NVIDIA_BINUTILS_DIR}/libs/
+    cp -a /mnt/flatcar/usr/lib64/*.so* ${NVIDIA_BINUTILS_DIR}/libs/
 }
 
 _cleanup_development_env() {
     echo "Cleaning up the development environment..."
-    _exec umount -lR /mnt/coreos/{proc,sys,dev,usr/src}
-    rm -rf /mnt/coreos
+    _exec umount -lR /mnt/flatcar/{proc,sys,dev,usr/src}
+    rm -rf /mnt/flatcar
 }
 
 # Install the kernel modules header/builtin/order files and generate the kernel version string.
@@ -88,15 +82,10 @@ _install_prerequisites() (
     rm -rf "/lib/modules/${KERNEL_VERSION}"
     rm -rf /usr/src/linux*
 
-    # Gather the tag for the release matching the current kernel version.
-    local kernel
-    kernel=$(echo "${KERNEL_VERSION}" | cut -d "-" -f1)
-    export COREOS_RELEASE_VERSION=$(curl -Ls "${COREOS_ALL_RELEASES}" | jq -r --arg kernel_ver "${kernel}" 'to_entries[] | select ((.value.major_software.kernel[0] == $kernel_ver) and (.key != "current")) | .key')
-
     _install_development_env 
     echo "Installing the Flatcar kernel sources into the development environment..."
 
-    cat <<'EOF' | chroot /mnt/coreos /bin/bash
+    cat <<'EOF' | chroot /mnt/flatcar /bin/bash
 KERNEL_VERSION=$(ls /lib/modules)
 KERNEL_STRING=$(echo "${KERNEL_VERSION}" | cut -d "-" -f1)
 echo "Installing kernel sources for kernel version ${KERNEL_VERSION}..."
@@ -113,11 +102,11 @@ cp /lib/modules/${KERNEL_VERSION}/build/scripts/module.lds /usr/src/nvidia-*/ker
 cd /usr/src/nvidia-*/kernel
 export IGNORE_CC_MISMATCH=1
 export IGNORE_MISSING_MODULE_SYMVERS=1
-export CC=x86_64-cros-linux-gnu-gcc
+export CC=$(arch)-cros-linux-gnu-gcc
 make -s -j SYSSRC=/lib/modules/${KERNEL_VERSION}/source SYSOUT=/lib/modules/${KERNEL_VERSION}/build nv-linux.o nv-modeset-linux.o > /dev/null
 EOF
     mkdir -p /lib/modules/${KERNEL_VERSION}
-    cp -r /mnt/coreos/lib/modules/${KERNEL_VERSION}/* /lib/modules/${KERNEL_VERSION}/
+    cp -r /mnt/flatcar/lib/modules/${KERNEL_VERSION}/* /lib/modules/${KERNEL_VERSION}/
     depmod "${KERNEL_VERSION}"
     
     _cleanup_development_env
@@ -295,8 +284,8 @@ _install_driver() {
     echo "Re-linking NVIDIA driver kernel modules..."
     local old_ld_path=$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${NVIDIA_BINUTILS_DIR}/libs:$LD_LIBRARY_PATH
-    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-x86-64.so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia.ko ./nv-linux.o ./nv-kernel.o_binary ./nvidia.mod.o
-    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-x86-64.so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia-modeset.ko ./nv-modeset-linux.o ./nv-modeset-kernel.o_binary nvidia-modeset.mod.o
+    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-$(arch | sed 's/_/-/g').so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia.ko ./nv-linux.o ./nv-kernel.o_binary ./nvidia.mod.o
+    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-$(arch | sed 's/_/-/g').so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia-modeset.ko ./nv-modeset-linux.o ./nv-modeset-kernel.o_binary nvidia-modeset.mod.o
     export LD_LIBRARY_PATH=${old_ld_path}
     
 
