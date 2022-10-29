@@ -282,10 +282,11 @@ _install_driver() {
     cp ../../nvidia/nv-kernel.o_binary .
     cp ../../nvidia-modeset/nv-modeset-kernel.o_binary .
     echo "Re-linking NVIDIA driver kernel modules..."
+    local ld_arch=$(arch | sed 's/_/-/g')
     local old_ld_path=$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${NVIDIA_BINUTILS_DIR}/libs:$LD_LIBRARY_PATH
-    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-$(arch | sed 's/_/-/g').so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia.ko ./nv-linux.o ./nv-kernel.o_binary ./nvidia.mod.o
-    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-$(arch | sed 's/_/-/g').so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia-modeset.ko ./nv-modeset-linux.o ./nv-modeset-kernel.o_binary nvidia-modeset.mod.o
+    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-${ld_arch}.so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia.ko ./nv-linux.o ./nv-kernel.o_binary ./nvidia.mod.o
+    ${NVIDIA_BINUTILS_DIR}/libs/ld-linux-${ld_arch}.so.2 ${NVIDIA_BINUTILS_DIR}/bin/ld -d -r -T ${base_dir}/module.lds -o nvidia-modeset.ko ./nv-modeset-linux.o ./nv-modeset-kernel.o_binary nvidia-modeset.mod.o
     export LD_LIBRARY_PATH=${old_ld_path}
     
 
