@@ -1,5 +1,6 @@
 ARG CUDA_VERSION=11.6.0
-FROM nvidia/cuda:${CUDA_VERSION}-base-ubuntu18.04
+ARG UBUNTU_VERSION=18.04
+FROM nvidia/cuda:${CUDA_VERSION}-base-ubuntu${UBUNTU_VERSION}
 
 ENV NVIDIA_VISIBLE_DEVICES=void
 
@@ -22,7 +23,6 @@ RUN dpkg --add-architecture i386 && \
         libelf-dev \
         libssl-dev \
         lbzip2 \
-        module-init-tools \
         software-properties-common && \
     rm -rf /var/lib/apt/lists/*
 
