@@ -14,6 +14,7 @@ RUN dpkg --add-architecture i386 && \
         build-essential \
         ca-certificates \
         curl \
+        fdisk \
         gnupg2 \
         jq \
         kmod \

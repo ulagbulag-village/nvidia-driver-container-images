@@ -40,8 +40,7 @@ _install_development_env() {
     local offset_limit=$((sector_start * sector_size))
 
     mkdir -p /mnt/coreos /mnt/dev
-    local loop_dev="/dev/loop0"
-    _exec mount -o loop=${loop_dev},offset=${offset_limit} ${dev_image} /mnt/dev
+    _exec mount -o offset=${offset_limit} ${dev_image} /mnt/dev
     tar -cp -C /mnt/dev . | tar -xpf - -C /mnt/coreos
     _exec umount -l /mnt/dev
     rm -f "${dev_image}"
