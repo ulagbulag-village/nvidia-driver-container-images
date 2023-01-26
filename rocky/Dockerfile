@@ -1,5 +1,4 @@
-ARG CUDA_VERSION=11.6.0
-ARG NV_CUDA_CUDART_VERSION=11.6.55-1
+ARG CUDA_VERSION=12.0.0
 ARG ROCKYLINUX_VERSION=9.1
 ARG TARGETARCH=amd64
 
@@ -24,8 +23,7 @@ ARG ROCKYLINUX_VERSION
 ENV CUDA_VERSION=${CUDA_VERSION}
 ENV DRIVER_VERSION=${DRIVER_VERSION}
 ENV NV_CUDA_CUDART_VERSION=${NV_CUDA_CUDART_VERSION}
-# ENV ROCKYLINUX_VERSION=${ROCKYLINUX_VERSION}
-ENV ROCKYLINUX_VERSION=8
+ENV ROCKYLINUX_VERSION=${ROCKYLINUX_VERSION}
 
 RUN echo -e "\
     [cuda]\n \
@@ -46,8 +44,8 @@ RUN NVIDIA_GPGKEY_SUM=d0664fbbdb8c32356d45de36c5984617217b2d0bef41b93ccecd326ba3
 # For libraries in the cuda-compat-* package: https://docs.nvidia.com/cuda/eula/index.html#attachment-a
 RUN export CUDA_VERSION="$(echo "${NV_CUDA_CUDART_VERSION%\.[0-9-]*}" | sed 's/\./-/g')" \
     && dnf upgrade -y && dnf install -y \
-    cuda-cudart-${CUDA_VERSION}-${NV_CUDA_CUDART_VERSION} \
-    cuda-compat-${CUDA_VERSION} \
+    cuda-compat-${CUDA_VERSION}-${DRIVER_VERSION} \
+    cuda-cudart-${CUDA_VERSION} \
     && yum clean all \
     && rm -rf /var/cache/yum/*
 
@@ -110,9 +108,8 @@ COPY nvidia-driver /usr/local/bin
 
 WORKDIR /usr/src/nvidia-${DRIVER_VERSION}
 
-ARG PUBLIC_KEY=empty
-COPY ${PUBLIC_KEY} kernel/pubkey.x509
-
-ARG PRIVATE_KEY
+# Source: https://github.com/awslife/nvidia-driver/blob/main/rocky/Dockerfile
+# Remove cuda repository to avoid GPG errors
+RUN rm -f /etc/yum.repos.d/cuda.repo
 
 ENTRYPOINT ["nvidia-driver", "init"]
