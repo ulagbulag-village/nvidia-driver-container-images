@@ -1,17 +1,14 @@
 ARG CUDA_VERSION=12.0.0
 ARG ROCKYLINUX_VERSION=9.1
-ARG TARGETARCH=amd64
 
 # Build CUDA Image
 FROM quay.io/rockylinux/rockylinux:${ROCKYLINUX_VERSION} as base
 
 ARG CUDA_VERSION
 ARG DRIVER_VERSION
-ARG NV_CUDA_CUDART_VERSION
 ARG ROCKYLINUX_VERSION
 ENV CUDA_VERSION=${CUDA_VERSION}
 ENV DRIVER_VERSION=${DRIVER_VERSION}
-ENV NV_CUDA_CUDART_VERSION=${NV_CUDA_CUDART_VERSION}
 ENV ROCKYLINUX_VERSION=${ROCKYLINUX_VERSION}
 
 LABEL maintainer "Ho Kim <ho.kim@ulagbulag.io>"
@@ -30,11 +27,11 @@ RUN NVARCH=$(uname -m | sed 's/^aarch64$/arm64/g' | sed 's/^arm64$/sbsa/g') \
     | sed '/^Version/d' > /etc/pki/rpm-gpg/RPM-GPG-KEY-NVIDIA \
     && echo "$NVIDIA_GPGKEY_SUM  /etc/pki/rpm-gpg/RPM-GPG-KEY-NVIDIA" | sha256sum -c --strict - \
     # For libraries in the cuda-compat-* package: https://docs.nvidia.com/cuda/eula/index.html#attachment-a
-    && CUDA_VERSION="$(echo "${NV_CUDA_CUDART_VERSION%\.[0-9-]*}" | sed 's/\./-/g')" \
+    && CUDA_VERSION_WITHOUT_PATCH="$(echo "${CUDA_VERSION%\.[0-9]*}" | sed 's/\./-/g')" \
     && dnf upgrade -y && dnf install -y \
     ca-certificates \
-    cuda-compat-${CUDA_VERSION}-${DRIVER_VERSION} \
-    cuda-cudart-${CUDA_VERSION} \
+    cuda-compat-${CUDA_VERSION_WITHOUT_PATCH}-${DRIVER_VERSION} \
+    cuda-cudart-${CUDA_VERSION_WITHOUT_PATCH} \
     curl \
     dnf-utils \
     gcc \
